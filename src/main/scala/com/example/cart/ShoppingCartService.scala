@@ -10,7 +10,7 @@ import scala.collection.mutable
 import io.circe.syntax._
 import squants.market.USD
 
-trait ShoppingCart[F[_]] {
+trait ShoppingCartService[F[_]] {
 
   def addItem(item: ItemTitle, quantity: Quantity): F[Unit]
 
@@ -18,13 +18,13 @@ trait ShoppingCart[F[_]] {
 
   def addCartItems(items: List[CartItem]): F[Unit]
 
-  def getCart: F[Cart]
+  def getCart: F[ShoppingCart]
 }
 
-object ShoppingCart {
+object ShoppingCartService {
   val TaxRate: Double = 12.5
 
-  def apply[F[_] : MonadThrow](catalog: ItemCatalog[F]): ShoppingCart[F] = new ShoppingCart[F] {
+  def apply[F[_] : MonadThrow](catalog: ItemCatalogService[F]): ShoppingCartService[F] = new ShoppingCartService[F] {
     private val store: mutable.Map[Item, Quantity] = mutable.Map.empty
 
     override def addItem(itemId: ItemTitle, quantity: Quantity): F[Unit] =
@@ -35,13 +35,13 @@ object ShoppingCart {
 
     private def addToStore(item: Item, quantity: Quantity): F[Unit] = MonadThrow[F].pure(store.addOne(item -> quantity)).void
 
-    override def getCart: F[Cart] = {
+    override def getCart: F[ShoppingCart] = {
       val nonEmptyListOrError = Either.fromOption(NonEmptyList.fromList(store.toList), EmptyCart())
 
       for {
         nonEmptyItemList <- MonadThrow[F].fromEither(nonEmptyListOrError)
         cartItems = nonEmptyItemList.map { case (item, quantity) => CartItem(item, quantity) }
-      } yield Cart(cartItems, cartTotals(cartItems))
+      } yield ShoppingCart(cartItems, cartTotals(cartItems))
     }
 
     override def getCartItem(title: ItemTitle): F[Option[CartItem]] =
@@ -53,7 +53,6 @@ object ShoppingCart {
     override def addCartItems(items: List[CartItem]): F[Unit] =
       MonadThrow[F].pure(store.addAll(items.map{case CartItem(item, quantity) => item -> quantity})).void
   }
-
 
   def cartTotals(cartItems: NonEmptyList[CartItem]): Totals = {
 

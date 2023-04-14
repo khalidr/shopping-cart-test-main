@@ -1,5 +1,6 @@
 package com.example.cart
 
+import cats.Show
 import cats.data.NonEmptyList
 import derevo.circe.magnolia.{decoder, encoder}
 import derevo.derive
@@ -18,17 +19,19 @@ object domain {
 
   case class Item(title: ItemTitle, price: Money)
 
-  case class Cart(items: NonEmptyList[CartItem], totals: Totals) {
-    def show: String = {
-      val lines = items.map { case CartItem(item, quantity) =>
+  case class ShoppingCart(items: NonEmptyList[CartItem], totals: Totals)
+
+  object ShoppingCart {
+    implicit val show: Show[ShoppingCart] = (cart: ShoppingCart) => {
+      val lines = cart.items.map { case CartItem(item, quantity) =>
         s"Add ${quantity.value} * ${item.title} @ ${item.price.toFormattedString}"
       }.toList
 
       val totalsString = {
         s"""
-           |Subtotal = ${totals.subtotal.toFormattedString}
-           |Tax = ${totals.taxesPayable.toFormattedString}
-           |Total = ${totals.total.toFormattedString}
+           |Subtotal = ${cart.totals.subtotal.toFormattedString}
+           |Tax = ${cart.totals.taxesPayable.toFormattedString}
+           |Total = ${cart.totals.total.toFormattedString}
            |""".stripMargin
       }
 

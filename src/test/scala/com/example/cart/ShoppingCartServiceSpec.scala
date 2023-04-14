@@ -2,23 +2,23 @@ package com.example.cart
 import cats.data.NonEmptyList
 import domain._
 import cats.effect._
-import com.example.cart.ShoppingCart.TaxRate
+import com.example.cart.ShoppingCartService.TaxRate
 import com.example.cart.errors.{EmptyCart, ItemNotFound}
 import squants.market.USD
 
 import scala.concurrent.Await
 import scala.concurrent.duration.DurationInt
 
-class ShoppingCartSpec extends UnitSpec with Arbitraries  {
+class ShoppingCartServiceSpec extends UnitSpec with Arbitraries  {
 
   "ShoppingCartApi" should "add new items to the shopping cart" in {
 
     forAll { (item: Item, quantity: Quantity) =>
-      val catalog = new ItemCatalog[IO] {
+      val catalog = new ItemCatalogService[IO] {
         override def find(title: ItemTitle): IO[Option[Item]] = IO.pure(Some(item))
       }
 
-      val shoppingCart: ShoppingCart[IO] = ShoppingCart[IO](catalog)
+      val shoppingCart: ShoppingCartService[IO] = ShoppingCartService[IO](catalog)
 
       {
         for {
@@ -31,11 +31,11 @@ class ShoppingCartSpec extends UnitSpec with Arbitraries  {
 
   it should "return an error when adding an item that does not exist" in {
     forAll { (item: Item, quantity: Quantity) =>
-      val catalog = new ItemCatalog[IO] {
+      val catalog = new ItemCatalogService[IO] {
         override def find(title: ItemTitle): IO[Option[Item]] = IO.pure(None)
       }
 
-      val shoppingCart: ShoppingCart[IO] = ShoppingCart[IO](catalog)
+      val shoppingCart: ShoppingCartService[IO] = ShoppingCartService[IO](catalog)
 
       assertThrows[ItemNotFound](Await.result(shoppingCart.addItem(item.title, quantity).unsafeToFuture(), 2.seconds))
     }
@@ -43,11 +43,11 @@ class ShoppingCartSpec extends UnitSpec with Arbitraries  {
 
   it should "replace items that already exist in the cart" in {
     forAll { (item: Item, existingQuantity: Quantity, newQuantity: Quantity) =>
-      val catalog = new ItemCatalog[IO] {
+      val catalog = new ItemCatalogService[IO] {
         override def find(title: ItemTitle): IO[Option[Item]] = IO.pure(Some(item))
       }
 
-      val shoppingCart: ShoppingCart[IO] = ShoppingCart[IO](catalog)
+      val shoppingCart: ShoppingCartService[IO] = ShoppingCartService[IO](catalog)
 
       {
         for {
@@ -64,11 +64,11 @@ class ShoppingCartSpec extends UnitSpec with Arbitraries  {
     forAll { (cartItems: List[CartItem]) =>
       whenever(cartItems.nonEmpty) {
 
-        val catalog = new ItemCatalog[IO] {
+        val catalog = new ItemCatalogService[IO] {
           override def find(id: ItemTitle): IO[Option[Item]] = IO.pure(cartItems.find(_.item.title == id).map(_.item))
         }
 
-        val shoppingCart: ShoppingCart[IO] = ShoppingCart[IO]( catalog)
+        val shoppingCart: ShoppingCartService[IO] = ShoppingCartService[IO]( catalog)
 
         for {
           _ <- shoppingCart.addCartItems(cartItems)
@@ -84,10 +84,10 @@ class ShoppingCartSpec extends UnitSpec with Arbitraries  {
 
   it should "return an error when an attempt is made to get an empty cart" in {
 
-      val itemCatalog = new ItemCatalog[IO] {
+      val itemCatalog = new ItemCatalogService[IO] {
         override def find(title: ItemTitle): IO[Option[Item]] = ???
       }
-      val shoppingCart = ShoppingCart[IO](itemCatalog)
+      val shoppingCart = ShoppingCartService[IO](itemCatalog)
 
       assertThrows[EmptyCart](Await.result(shoppingCart.getCart.unsafeToFuture, 2.seconds))
   }
@@ -101,7 +101,7 @@ class ShoppingCartSpec extends UnitSpec with Arbitraries  {
           CartItem(Item(ItemTitle("c"), USD(33.33)), Quantity(100)))
       )
 
-    val actual = ShoppingCart.cartTotals(list)
+    val actual = ShoppingCartService.cartTotals(list)
 
     val subTotal = USD(5.50) + (USD(15.50) * 10) + (USD(33.33) * 100)
     val taxes = subTotal * (TaxRate / 100)

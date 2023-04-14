@@ -4,28 +4,31 @@ import cats.effect.Sync
 import cats.implicits._
 import cats.syntax.either._
 import com.example.cart.domain._
-import com.example.cart.errors.EndpointError
+import com.example.cart.errors.{EndpointError, ParseError}
 import io.circe.generic.auto._
 import io.circe.parser._
 import io.circe.syntax._
 import okhttp3.{OkHttpClient, Request, Response}
 
-trait ItemCatalog[F[_]] {
+import java.net.URL
+
+trait ItemCatalogService[F[_]] {
   def find(title: ItemTitle): F[Option[Item]]
 }
 
-object ItemCatalog extends Encoders {
+object ItemCatalogService extends Encoders {
   private val itemsBaseUrl = "https://raw.githubusercontent.com/mattjanks16/shopping-cart-test-data/main"
 
-  def apply[F[_] : Sync](client: OkHttpClient): ItemCatalog[F] = (title: ItemTitle) => {
+  def apply[F[_] : Sync](client: OkHttpClient): ItemCatalogService[F] = (title: ItemTitle) => {
+    val url = s"$itemsBaseUrl/${title.value}.json"
     val request = new Request
     .Builder()
-      .url(s"$itemsBaseUrl/${title.value}.json")
+      .url(url)
       .get()
       .build()
 
     def makeCall: F[Response] = Sync[F].blocking(client.newCall(request).execute()).adaptErr {
-      e: Throwable => EndpointError(title, e.getMessage)
+      e: Throwable => EndpointError(new URL(url), e.getMessage)
     }
 
     for {
@@ -34,7 +37,8 @@ object ItemCatalog extends Encoders {
         case 200 => Option(response.body()).map(_.string)
         case _ => None
       }
-      decoded <- Sync[F].fromEither(maybeBodyString.map(decode[Item](_)).sequence.leftMap(_.getCause))
-    } yield decoded
+      decodedOrError = maybeBodyString.map(decode[Item](_)).sequence
+      maybeItem <- Sync[F].fromEither(decodedOrError.leftMap(e => ParseError(new URL(url), e.getMessage)))
+    } yield maybeItem
   }
 }

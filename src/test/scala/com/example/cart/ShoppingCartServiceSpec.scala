@@ -1,15 +1,17 @@
 package com.example.cart
+
 import cats.data.NonEmptyList
 import domain._
 import cats.effect._
 import com.example.cart.ShoppingCartService.TaxRate
 import com.example.cart.errors.{EmptyCart, ItemNotFound}
+import squants.Money
 import squants.market.USD
 
 import scala.concurrent.Await
 import scala.concurrent.duration.DurationInt
 
-class ShoppingCartServiceSpec extends UnitSpec with Arbitraries  {
+class ShoppingCartServiceSpec extends UnitSpec with Arbitraries {
 
   "ShoppingCartApi" should "add new items to the shopping cart" in {
 
@@ -68,7 +70,7 @@ class ShoppingCartServiceSpec extends UnitSpec with Arbitraries  {
           override def find(id: ItemTitle): IO[Option[Item]] = IO.pure(cartItems.find(_.item.title == id).map(_.item))
         }
 
-        val shoppingCart: ShoppingCartService[IO] = ShoppingCartService[IO]( catalog)
+        val shoppingCart: ShoppingCartService[IO] = ShoppingCartService[IO](catalog)
 
         for {
           _ <- shoppingCart.addCartItems(cartItems)
@@ -84,30 +86,38 @@ class ShoppingCartServiceSpec extends UnitSpec with Arbitraries  {
 
   it should "return an error when an attempt is made to get an empty cart" in {
 
-      val itemCatalog = new ItemCatalogService[IO] {
-        override def find(title: ItemTitle): IO[Option[Item]] = ???
-      }
-      val shoppingCart = ShoppingCartService[IO](itemCatalog)
+    val itemCatalog = new ItemCatalogService[IO] {
+      override def find(title: ItemTitle): IO[Option[Item]] = ???
+    }
+    val shoppingCart = ShoppingCartService[IO](itemCatalog)
 
-      assertThrows[EmptyCart](Await.result(shoppingCart.getCart.unsafeToFuture, 2.seconds))
+    assertThrows[EmptyCart](Await.result(shoppingCart.getCart.unsafeToFuture, 2.seconds))
   }
 
   it should "calculate the subtotal of the cart" in {
-    val list =
-      NonEmptyList.fromListUnsafe(
-        List(
-          CartItem(Item(ItemTitle("a"), USD(5.50)), Quantity(1)),
-          CartItem(Item(ItemTitle("b"), USD(15.50)), Quantity(10)),
-          CartItem(Item(ItemTitle("c"), USD(33.33)), Quantity(100)))
-      )
 
-    val actual = ShoppingCartService.cartTotals(list)
+    forAll { (p1: (Money, Quantity), p2: (Money, Quantity), p3: (Money, Quantity)) =>
 
-    val subTotal = USD(5.50) + (USD(15.50) * 10) + (USD(33.33) * 100)
-    val taxes = subTotal * (TaxRate / 100)
-    val total = subTotal + taxes
-    val expected = Totals(subTotal, taxes, total)
+      val (price1, quantity1) = p1
+      val (price2, quantity2) = p2
+      val (price3, quantity3) = p3
 
-    actual shouldBe expected
+      val list =
+        NonEmptyList.fromListUnsafe(
+          List(
+            CartItem(Item(ItemTitle("a"), price1), quantity1),
+            CartItem(Item(ItemTitle("b"), price2), quantity2),
+            CartItem(Item(ItemTitle("c"), price3), quantity3))
+        )
+
+      val actual = ShoppingCartService.cartTotals(list)
+
+      val subTotal = (price1 * quantity1.value) + (price2 * quantity2.value) + (price3 * quantity3.value)
+      val taxes = subTotal * (TaxRate / 100)
+      val total = subTotal + taxes
+      val expected = Totals(subTotal, taxes, total)
+
+      actual shouldBe expected
+    }
   }
 }

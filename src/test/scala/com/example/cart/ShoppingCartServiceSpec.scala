@@ -95,7 +95,7 @@ class ShoppingCartServiceSpec extends UnitSpec with Arbitraries {
     assertThrows[EmptyCart](Await.result(shoppingCart.getCart.unsafeToFuture, 2.seconds))
   }
 
-  it should "calculate the subtotal of the cart" in {
+  it should "calculate the taxes, subtotal and total of the cart" in {
 
     forAll { (p1: (Money, Quantity), p2: (Money, Quantity), p3: (Money, Quantity)) =>
 

@@ -72,11 +72,12 @@ class ShoppingCartServiceSpec extends UnitSpec with Arbitraries {
 
         val shoppingCart: ShoppingCartService[IO] = ShoppingCartService[IO](catalog)
 
-        for {
-          _ <- shoppingCart.addCartItems(cartItems)
-        } yield ???
-
-        val result = shoppingCart.getCart.unsafeToFuture().futureValue
+        val result = {
+          for {
+            _ <- shoppingCart.addCartItems(cartItems)
+            cart <- shoppingCart.getCart
+          } yield cart
+        }.unsafeToFuture().futureValue
 
         result.items.toList should contain theSameElementsAs cartItems
         result.totals.total should be > USD(0.0)

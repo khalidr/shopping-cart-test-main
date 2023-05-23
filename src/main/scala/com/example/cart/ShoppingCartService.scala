@@ -1,14 +1,13 @@
 package com.example.cart
 
 import cats.MonadThrow
-import cats.data.NonEmptyList
 import cats.implicits.{toFunctorOps, _}
 import com.example.cart.domain._
 import com.example.cart.errors._
-
-import scala.collection.mutable
 import io.circe.syntax._
 import squants.market.USD
+
+import scala.collection.mutable
 
 trait ShoppingCartService[F[_]] {
 
@@ -19,6 +18,8 @@ trait ShoppingCartService[F[_]] {
   def addCartItems(items: List[CartItem]): F[Unit]
 
   def getCart: F[ShoppingCart]
+
+  def removeItem(item: ItemTitle): F[DeleteStatus]
 }
 
 object ShoppingCartService {
@@ -36,25 +37,37 @@ object ShoppingCartService {
     private def addToStore(item: Item, quantity: Quantity): F[Unit] = MonadThrow[F].pure(store.addOne(item -> quantity)).void
 
     override def getCart: F[ShoppingCart] = {
-      val nonEmptyListOrError = Either.fromOption(NonEmptyList.fromList(store.toList), EmptyCart())
 
-      for {
-        nonEmptyItemList <- MonadThrow[F].fromEither(nonEmptyListOrError)
-        cartItems = nonEmptyItemList.map { case (item, quantity) => CartItem(item, quantity) }
-      } yield ShoppingCart(cartItems, cartTotals(cartItems))
+      val cartItems = for {
+        (item, quantity) <- store.toList
+      } yield CartItem(item, quantity)
+
+      MonadThrow[F].pure(ShoppingCart(cartItems, cartTotals(cartItems)))
     }
 
     override def getCartItem(title: ItemTitle): F[Option[CartItem]] =
       MonadThrow[F]
         .pure(store.find { case (item, _) => item.title == title }
-          .map{case(item, quantity) => CartItem(item, quantity)})
+          .map { case (item, quantity) => CartItem(item, quantity) })
 
 
     override def addCartItems(items: List[CartItem]): F[Unit] =
-      MonadThrow[F].pure(store.addAll(items.map{case CartItem(item, quantity) => item -> quantity})).void
+      MonadThrow[F].pure(store.addAll(items.map { case CartItem(item, quantity) => item -> quantity })).void
+
+
+    override def removeItem(itemTitle: ItemTitle): F[DeleteStatus] = {
+      val maybeRemoved = for {
+        (item, _) <- store.find { case (k, _) => k.title == itemTitle }
+        removed <- store.remove(item)
+      } yield removed
+
+      MonadThrow[F].pure {
+        maybeRemoved.map(_ => Successful).getOrElse(Failed)
+      }
+    }
   }
 
-  def cartTotals(cartItems: NonEmptyList[CartItem]): Totals = {
+  def cartTotals(cartItems: List[CartItem]): Totals = {
 
     val subTotal = cartItems.foldLeft(USD(0)) { case (runningTotal, cartItem) =>
       runningTotal + (cartItem.item.price * cartItem.quantity.value)

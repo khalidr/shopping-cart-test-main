@@ -1,9 +1,8 @@
 package com.example.cart
 
-import cats.data.NonEmptyList
-import domain._
 import cats.effect._
 import com.example.cart.ShoppingCartService.TaxRate
+import com.example.cart.domain._
 import com.example.cart.errors.{EmptyCart, ItemNotFound}
 import squants.Money
 import squants.market.USD
@@ -79,23 +78,13 @@ class ShoppingCartServiceSpec extends UnitSpec with Arbitraries {
           } yield cart
         }.unsafeToFuture().futureValue
 
-        result.items.toList should contain theSameElementsAs cartItems
+        result.items should contain theSameElementsAs cartItems
         result.totals.total should be > USD(0.0)
       }
     }
   }
 
-  it should "return an error when an attempt is made to get an empty cart" in {
-
-    val itemCatalog = new ItemCatalogService[IO] {
-      override def find(title: ItemTitle): IO[Option[Item]] = ???
-    }
-    val shoppingCart = ShoppingCartService[IO](itemCatalog)
-
-    assertThrows[EmptyCart](Await.result(shoppingCart.getCart.unsafeToFuture, 2.seconds))
-  }
-
-  it should "calculate the taxes, subtotal and total of the cart" in {
+  it should "calculate the subtotal of the cart" in {
 
     forAll { (p1: (Money, Quantity), p2: (Money, Quantity), p3: (Money, Quantity)) =>
 
@@ -103,15 +92,14 @@ class ShoppingCartServiceSpec extends UnitSpec with Arbitraries {
       val (price2, quantity2) = p2
       val (price3, quantity3) = p3
 
-      val list =
-        NonEmptyList.fromListUnsafe(
+      val cartItems =
           List(
             CartItem(Item(ItemTitle("a"), price1), quantity1),
             CartItem(Item(ItemTitle("b"), price2), quantity2),
             CartItem(Item(ItemTitle("c"), price3), quantity3))
-        )
 
-      val actual = ShoppingCartService.cartTotals(list)
+
+      val actual = ShoppingCartService.cartTotals(cartItems)
 
       val subTotal = (price1 * quantity1.value) + (price2 * quantity2.value) + (price3 * quantity3.value)
       val taxes = subTotal * (TaxRate / 100)

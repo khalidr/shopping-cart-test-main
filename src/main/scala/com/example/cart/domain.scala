@@ -1,7 +1,6 @@
 package com.example.cart
 
 import cats.Show
-import cats.data.NonEmptyList
 import derevo.circe.magnolia.{decoder, encoder}
 import derevo.derive
 import io.estatico.newtype.macros.newtype
@@ -19,7 +18,7 @@ object domain {
 
   case class Item(title: ItemTitle, price: Money)
 
-  case class ShoppingCart(items: NonEmptyList[CartItem], totals: Totals)
+  case class ShoppingCart(items: List[CartItem], totals: Totals)
 
   object ShoppingCart {
     implicit val show: Show[ShoppingCart] = (cart: ShoppingCart) => {
@@ -40,5 +39,11 @@ object domain {
   }
 
   case class CartItem(item: Item, quantity: Quantity)
+
+  trait DeleteStatus
+
+  case object Successful extends DeleteStatus
+
+  case object Failed extends DeleteStatus
 
 }
